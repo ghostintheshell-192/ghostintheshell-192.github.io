@@ -1,0 +1,126 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --bg-primary: #0a0e14;
+    --bg-secondary: #0f1419;
+    --text-primary: #e6e6e6;
+    --text-secondary: #8a8a8a;
+    --accent-cyan: #00ff9f;
+    --accent-hover: #00cc7f;
+}
+
+body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+.container {
+    max-width: 600px;
+    width: 100%;
+}
+
+header {
+    margin-bottom: 3rem;
+}
+
+.name {
+    font-size: 2rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+}
+
+h2 {
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+    font-weight: 400;
+}
+
+.projects {
+    margin-bottom: 3rem;
+}
+
+.project {
+    margin-bottom: 1.5rem;
+}
+
+.project-name {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.project-links {
+    display: flex;
+    gap: 1.5rem;
+}
+
+.contact {
+    margin-bottom: 2rem;
+}
+
+a {
+    color: var(--accent-cyan);
+    text-decoration: none;
+    font-size: 0.95rem;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+a::after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 1px;
+    bottom: -2px;
+    left: 0;
+    background-color: var(--accent-cyan);
+    transition: width 0.2s ease;
+}
+
+a:hover {
+    color: var(--accent-hover);
+}
+
+a:hover::after {
+    width: 100%;
+}
+
+/* Subtle glow effect on hover */
+a:hover {
+    text-shadow: 0 0 8px rgba(0, 255, 159, 0.3);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 640px) {
+    body {
+        padding: 1.5rem;
+    }
+
+    .name {
+        font-size: 1.5rem;
+    }
+
+    .project-name {
+        font-size: 1rem;
+    }
+
+    .project-links {
+        gap: 1rem;
+    }
+}

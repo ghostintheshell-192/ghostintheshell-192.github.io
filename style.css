@@ -39,6 +39,13 @@ header {
     font-weight: 600;
     color: var(--text-primary);
     letter-spacing: -0.02em;
+    margin-bottom: 0.5rem;
+}
+
+.linkedin-link {
+    display: block;
+    font-size: 0.95rem;
+    margin-top: 0.5rem;
 }
 
 h2 {
@@ -68,10 +75,6 @@ h2 {
 .project-links {
     display: flex;
     gap: 1.5rem;
-}
-
-.contact {
-    margin-bottom: 2rem;
 }
 
 a {

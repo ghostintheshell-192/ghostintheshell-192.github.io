@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RAID Explorer — Valentina Malavenda</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="page-wrapper">
+
+  <!-- Header -->
+  <header class="page-header">
+    <a class="back-link" href="../../index.html">← back</a>
+    <h1 class="page-title">RAID <span>Explorer</span></h1>
+    <p class="page-subtitle">Interactive guide to RAID storage configurations</p>
+  </header>
+
+  <!-- Tabs -->
+  <nav class="tabs" role="tablist">
+    <button class="tab-btn active" id="tab-visualize" role="tab" aria-selected="true">Visualize</button>
+    <button class="tab-btn" id="tab-kb"    role="tab" aria-selected="false">Knowledge Base</button>
+    <button class="tab-btn" id="tab-build" role="tab" aria-selected="false">Build</button>
+  </nav>
+
+  <!-- Visualize View (default) -->
+  <section id="view-visualize" class="view" role="tabpanel">
+    <div id="visualize-content"></div>
+  </section>
+
+  <!-- Knowledge Base View -->
+  <section id="view-kb" class="view hidden" role="tabpanel">
+    <div id="kb-content"></div>
+  </section>
+
+  <!-- Build View -->
+  <section id="view-build" class="view hidden" role="tabpanel">
+    <div id="build-content"></div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="page-footer">
+    <a href="mailto:valentina.malavenda01@gmail.com">Valentina Malavenda</a> — click any block or badge for explanations · press <kbd>Esc</kbd> to close popups
+  </footer>
+
+</div>
+
+<!-- Popup overlay -->
+<div id="popup-overlay" class="hidden" role="dialog" aria-modal="true">
+  <div class="popup-box">
+    <h2 class="popup-title" id="popup-title"></h2>
+    <button id="popup-close" aria-label="Close">✕</button>
+    <div class="popup-body" id="popup-body"></div>
+  </div>
+</div>
+
+<!-- js-yaml: parses YAML files loaded via fetch -->
+<script src="https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js"></script>
+<!-- KaTeX: LaTeX formula rendering in popups -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<script src="engine.js"></script>
+</body>
+</html>

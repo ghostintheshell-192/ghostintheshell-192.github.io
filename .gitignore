@@ -1,0 +1,29 @@
+# ---- Session / personal (never tracked) ----
+.personal/
+.development/
+.memory-bank/
+
+# ---- Shell & system dotfiles ----
+.bash_profile
+.bashrc
+.profile
+.zprofile
+.zshrc
+.gitconfig
+.gitmodules
+.ripgreprc
+
+# ---- IDE ----
+.idea
+.vscode
+
+# ---- Claude Code local / runtime files ----
+.mcp.json
+.claude/agents
+.claude/settings.local.json
+
+# ---- Personal scripts ----
+.scripts/
+
+# ---- Docs (empty placeholder for now) ----
+docs/

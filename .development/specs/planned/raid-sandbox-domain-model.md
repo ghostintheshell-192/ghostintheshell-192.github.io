@@ -234,20 +234,35 @@ placement:                            # the two-step rule, as data
 > A *variant* algorithm = a new file. A *radically new* placement = a new file + a new primitive.
 > ~90% data-driven, not 100% — accepted.
 >
-> **Graceful degradation is a hard requirement.** The engine must not break when an algorithm
-> file references a primitive that does not exist, or when an algorithm is missing entirely:
+> **Algorithm fallback is a hard requirement** (field name: `fallback` — NOT "degraded", which is
+> reserved for the runtime disk/array state in `drive-states.md`). The engine must not break when an
+> algorithm file references a primitive that does not exist, or when an algorithm is missing:
 >
 > - Unknown primitive → fall back to the layout's **default** algorithm (e.g. `left-symmetric`
->   for parity, `near` for mirror) and surface a non-blocking notice.
+>   for parity) and surface a non-blocking `fallback` notice.
 > - Missing/empty descriptor → still build the topology and derive the level; only the
->   *animation* is skipped (with a "placement detail unavailable" note), never the whole view.
+>   *animation* is skipped, never the whole view.
 >
-> Rationale: the author's notes are not guaranteed complete. The system must stay generic and
-> additive — a half-specified algorithm degrades, it does not crash.
+> This fallback is an **internal safety net** (resource files may be incomplete) — it is NOT a
+> user-facing choice. The UI offers only known algorithms, so a user can never select an unknown one.
+>
+> **Verification protocol (golden tables).** An algorithm is "correct" iff its placement reproduces
+> an **authoritative published table**, not by visual inspection. Only verified algorithms go in the
+> engine's known-list and the UI. Each added algorithm ships with a golden reference table (from a
+> citable source) baked into the test suite. v1 ships `left-symmetric` only (verified against the
+> canonical table + `.personal` notes); RAID 0 / mirror / JBOD are trivially correct by inspection.
+
+**Two distinct "non-standard" concepts — do not conflate:**
+
+- **Non-standard NAME** comes from the *topology* (`segmentation + redundancy + nesting shape`), e.g.
+  `striped+mirror` (RAID 1E family) or stripe-over-stripes. This is the legitimate answer-engine case
+  (§4): a valid build with no canonical name → `flag: 'non-standard-config'`.
+- **The algorithm never affects the name.** A RAID 5 with right-asymmetric is still RAID 5 — same
+  topology, different placement. Algorithm changes only *how* data lands (and the animation).
 
 Algorithms to cover (from `distribuzione-segmenti-algoritmi.md`): left/right · symmetric/asymmetric,
-RAID10 near/far/offset, RAID1E, dRAID, erasure coding (k+m). v1 need not implement all — the
-schema must *accommodate* all, and the engine must tolerate any of them being absent.
+RAID10 near/far/offset, RAID1E, dRAID, erasure coding (k+m). v1 need not implement all — the schema
+must *accommodate* all; the engine tolerates any being absent; only golden-verified ones are offered.
 
 ### 5c. RAID-level resource — schema (proposal)
 
@@ -300,6 +315,14 @@ per stripe, the `(disk, role: data|parity|mirror, sequence)` mapping, then plays
 `segment-allocation-rule-left-symmetric.md` is the worked reference: its two tables (parity
 placement, then data fill with wrap-around) are exactly what the animator must reproduce — and the
 two-span example there is the RAID-50 case from §3.
+
+**The placement domain is narrower than the recognizer domain.** `model.js` names (or flags) *any*
+topology and always derives capacity + fault tolerance (they depend on redundancy alone). But a
+data *placement* exists only where it is real and golden-verifiable. So a build can be valid,
+non-standard-named, with defined capacity/FT — yet have **no defined placement** (e.g.
+`linear+parity1`: parity needs a stripe to be computed over; `striped+mirror`: RAID 1E, not yet
+verified). In those cases `computePlacement` returns `{unsupported, reason}` and the UI shows the
+reason — it never invents a fake grid. Faithfulness over coverage.
 
 ---
 

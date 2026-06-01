@@ -92,28 +92,41 @@ The single most important decision. An **array** does not contain disks; it cont
 and a member is **either a disk or another array**. Recursion gives nested RAID (10, 50, 60, 6+0)
 *for free* — build the mattone once, compose forever.
 
+An array's "layout" is **two orthogonal choices**, not one (this drives the step-by-step prompt
+gameplay: *step 1 — how do you segment? step 2 — how do you protect?*):
+
 ```
 Node =
   | Disk  { id, sizeGB, protocol: SATA|SAS|NVMe, backplaneId }
-  | Array { layout, members: Node[], algorithm? }
+  | Array { segmentation, redundancy, members: Node[], algorithm? }
 
-layout ∈ { stripe, mirror, parity1, parity2, concat }
+segmentation ∈ { striped, linear }                  ← how data is split across members
+redundancy   ∈ { none, mirror, parity1, parity2 }   ← how data is protected
 ```
+
+**The two axes are independent, and drive different derived properties:**
+
+| Choice | Drives |
+|--------|--------|
+| **segmentation** | the *name* (`striped+none` = RAID 0 vs `linear+none` = JBOD) and the placement **animation** |
+| **redundancy** | **capacity** and **fault tolerance** — segmentation does not affect these |
 
 - `Array.members` may be `Disk`s (a leaf array, e.g. a single RAID-5 span) or other `Array`s
   (a nesting array, e.g. the RAID-0 stripe over two RAID-5 spans → RAID 50).
-- `algorithm` (axis B placement rule) attaches to the array whose `layout` needs one
+- `algorithm` (axis B placement rule) attaches to the array whose layout needs one
   (parity arrays → left/right symmetric/asymmetric; mirror arrays → near/far/offset).
+- *"Concat"/JBOD is not a separate primitive* — it is `segmentation: linear, redundancy: none`
+  (the "disk spanning" of `terminologia.md`).
 
 ### Worked example — RAID 50 (from `nested-raids.md`)
 
 ```
-Array { layout: stripe }                      ← top: RAID 0 across spans
- ├─ Array { layout: parity1, algo: right-asymmetric, members: [D1,D2,D3,D4] }   ← span A (RAID 5)
- └─ Array { layout: parity1, algo: right-asymmetric, members: [D5,D6,D7,D8] }   ← span B (RAID 5)
+Array { striped, none }                                ← top: RAID 0 across spans
+ ├─ Array { striped, parity1, algo: right-asymmetric, members: [D1,D2,D3,D4] }   ← span A (RAID 5)
+ └─ Array { striped, parity1, algo: right-asymmetric, members: [D5,D6,D7,D8] }   ← span B (RAID 5)
 ```
 
-This same shape, with `parity1`→`parity2`, is RAID 60. With the spans being `mirror`, it is RAID 10.
+Same shape with `parity1`→`parity2` is RAID 60; with spans `linear+mirror` it is RAID 10.
 
 ---
 
@@ -122,17 +135,17 @@ This same shape, with `parity1`→`parity2`, is RAID 60. With the spans being `m
 The engine recognizes the level by **pattern-matching the tree shape**. A small, ordered
 recognizer (first match wins):
 
-| Tree shape | Derived level |
+| Tree shape (segmentation + redundancy) | Derived level |
 |-----------|---------------|
-| single array, `concat`, members = disks | **JBOD / spanned** (not RAID) |
-| single array, `stripe`, members = disks | **RAID 0** |
-| single array, `mirror`, members = disks | **RAID 1** (RAID 1E if odd-count interleaved) |
-| single array, `parity1`, members = disks | **RAID 5** |
-| single array, `parity2`, members = disks | **RAID 6** |
-| `stripe` over `mirror` arrays | **RAID 10** (1+0) |
-| `stripe` over `parity1` arrays | **RAID 50** |
-| `stripe` over `parity2` arrays | **RAID 60** |
-| anything else | **custom / unrecognized** (sandbox still shows the data layout) |
+| `linear + none`, members = disks | **JBOD / spanned** (not RAID) |
+| `striped + none`, members = disks | **RAID 0** |
+| `linear + mirror`, members = disks | **RAID 1** (n-way if >2 disks) |
+| `striped + parity1`, members = disks | **RAID 5** |
+| `striped + parity2`, members = disks | **RAID 6** |
+| `striped + none` over `mirror` spans | **RAID 10** (1+0) |
+| `striped + none` over `parity1` spans | **RAID 50** |
+| `striped + none` over `parity2` spans | **RAID 60** |
+| anything else (e.g. `striped + mirror` = RAID 1E family) | **custom / unrecognized** (sandbox still shows the data layout) |
 
 > **[DECISIONE — CONFERMATA]** A valid composition with no standard name is **allowed and
 > animated** in sandbox: *anything without a violated constraint can be built.* The recognizer

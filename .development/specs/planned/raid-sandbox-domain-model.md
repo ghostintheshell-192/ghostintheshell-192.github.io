@@ -5,9 +5,9 @@
 **Branch (current):** `feature/raid-shared-disks-nested` · prior: `feature/raid-sandbox-domain-model` (merged)
 **Source notes:** `.personal/*.md` + `.personal/IMG20260601163917.jpg` (RIEPILOGO diagram)
 
-> This is the *carta*: the model from which both the YAML resource files and the
+> This is the *blueprint*: the model from which both the YAML resource files and the
 > engine derive. It is meant to be marked up, not obeyed. Where a decision is the
-> author's to make, it is tagged **[DECISIONE]**.
+> author's to make, it is tagged **[DECISION]**.
 
 ---
 
@@ -66,7 +66,7 @@ Hardware / software / fake RAID are **not three different things**. They are the
 path* with the **RAID engine ("motore RAID") placed at a different point**:
 
 ```
-Dischi (SATA/SAS/NVMe) → Backplane → HBA → [PCIe bus] → CPU → OS
+Disks (SATA/SAS/NVMe) → Backplane → HBA → [PCIe bus] → CPU → OS
                                        ▲        ▲          ▲
                               hardware │   fake │    software│
                               (RoC on  │  (chip │   (mdadm/  │
@@ -89,7 +89,7 @@ path*, and the placement **is** the type.
 The two axes are orthogonal *in the model*, but the player sees them as **two views of one build**,
 and the views must visibly be about the *same* disks. The bridge:
 
-> **[DECISIONE — CONFERMATA 2026-06-02]** A disk is **one entity with one identity**, created once
+> **[DECISION — CONFIRMED 2026-06-02]** A disk is **one entity with one identity**, created once
 > and present in **both** views — never dragged twice. In the **data view** you group it into the
 > array tree; in the **physical view** it sits at the base of the control path. The conceptual
 > weld is the **RAID engine**: the layout you compose in the data view is *what the engine
@@ -113,7 +113,7 @@ backplane-diversity module.
 
 The single most important decision. An **array** does not contain disks; it contains **members**,
 and a member is **either a disk or another array**. Recursion gives nested RAID (10, 50, 60, 6+0)
-*for free* — build the mattone once, compose forever.
+*for free* — build the brick once, compose forever.
 
 An array's "layout" is **two orthogonal choices**, not one (this drives the step-by-step prompt
 gameplay: *step 1 — how do you segment? step 2 — how do you protect?*):
@@ -170,7 +170,7 @@ recognizer (first match wins):
 | `striped + none` over `parity2` spans | **RAID 60** |
 | anything else (e.g. `striped + mirror` = RAID 1E family) | **custom / unrecognized** (sandbox still shows the data layout) |
 
-> **[DECISIONE — CONFERMATA]** A valid composition with no standard name is **allowed and
+> **[DECISION — CONFIRMED]** A valid composition with no standard name is **allowed and
 > animated** in sandbox: *anything without a violated constraint can be built.* The recognizer
 > emits an explicit status flag so the UI can react:
 >
@@ -187,7 +187,7 @@ recognizer (first match wins):
 
 ## 4b. Deriving performance (axis B → throughput, *measurable*)
 
-> **[DECISIONE — CONFERMATA 2026-06-02]** Performance is a **first-class derived property**,
+> **[DECISION — CONFIRMED 2026-06-02]** Performance is a **first-class derived property**,
 > alongside capacity and fault-tolerance. It is computed from real, citable formulas — never
 > eyeballed — so that prompt-mode requirements like *"optimized for sequential reads"* become
 > checkable in the same outcome-based way as `faultTolerance >= 2` (the golden-table principle
@@ -294,7 +294,7 @@ placement:                            # the two-step rule, as data
     wrap: true                        # wrap-around at right edge
 ```
 
-> **[DECISIONE — CONFERMATA]** The engine has a small library of **parametric placement
+> **[DECISION — CONFIRMED]** The engine has a small library of **parametric placement
 > primitives** (`stripe`, `mirror-near/far/offset`, `parity-rotate`) that read these descriptors.
 > A *variant* algorithm = a new file. A *radically new* placement = a new file + a new primitive.
 > ~90% data-driven, not 100% — accepted.
@@ -364,7 +364,7 @@ a central rulebook — that's what keeps "add a file" honest.
 | members of a span *should* span different backplanes | `terminologia.md` | **soft** (best practice / warning) |
 | hot-spare capacity ≥ coerced capacity of failed disk | `terminologia.md` | runtime module — deferred |
 
-**[DECISIONE]** Prompt mode *blocks* on hard constraints step-by-step; sandbox *allows the
+**[DECISION]** Prompt mode *blocks* on hard constraints step-by-step; sandbox *allows the
 mistake* and explains why it's invalid. Same validator, different enforcement timing. Soft
 constraints are warnings in both. Confirm.
 

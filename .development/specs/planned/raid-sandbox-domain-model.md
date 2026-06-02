@@ -1,13 +1,13 @@
 # RAID Sandbox — Domain Model (design backbone)
 
-**Status:** planned · first draft for review
-**Date:** 2026-06-01
-**Branch:** `feature/raid-sandbox-domain-model`
+**Status:** active · phases 0–4 implemented & merged · remaining work replanned 2026-06-02
+**Date:** 2026-06-01 (replanned 2026-06-02)
+**Branch (current):** `feature/raid-shared-disks-nested` · prior: `feature/raid-sandbox-domain-model` (merged)
 **Source notes:** `.personal/*.md` + `.personal/IMG20260601163917.jpg` (RIEPILOGO diagram)
 
-> This is the *carta*: the model from which both the YAML resource files and the
+> This is the *blueprint*: the model from which both the YAML resource files and the
 > engine derive. It is meant to be marked up, not obeyed. Where a decision is the
-> author's to make, it is tagged **[DECISIONE]**.
+> author's to make, it is tagged **[DECISION]**.
 
 ---
 
@@ -54,8 +54,10 @@ resource-file approach hold.
 | **A. Control path** | disks → backplane → HBA → RAID engine → PCIe → CPU → OS | hardware / software / fake RAID + which OS | `hardware/software/fake-raid.md`, `protocolli-dischi.md`, RIEPILOGO image |
 | **B. Data layout** | striping, mirror, parity, placement algorithm, nesting | the RAID *level* + the **animation** | `distribuzione-segmenti-algoritmi.md`, `segment-allocation-rule-left-symmetric.md`, `nested-raids.md` |
 
-They are orthogonal: *RAID 6 left-symmetric* can run on hardware **or** software. A build is
-**a control path (axis A) carrying a data layout (axis B).**
+They are orthogonal *at the level granularity*: *RAID 6 left-symmetric* can run on hardware **or**
+software. A build is **a control path (axis A) carrying a data layout (axis B).** But the axes
+**interact on the algorithm menu**: the control path *gates which layout algorithms are available*
+(see §6) — e.g. RAID 10 `near/far/offset` exist only under Linux software RAID (mdadm).
 
 A **third axis — runtime behavior** (drive states, hot-spare rebuild, failure simulation;
 `drive-states.md`) — is explicitly **out of scope** for v1, designed as a separate future module.
@@ -66,7 +68,7 @@ Hardware / software / fake RAID are **not three different things**. They are the
 path* with the **RAID engine ("motore RAID") placed at a different point**:
 
 ```
-Dischi (SATA/SAS/NVMe) → Backplane → HBA → [PCIe bus] → CPU → OS
+Disks (SATA/SAS/NVMe) → Backplane → HBA → [PCIe bus] → CPU → OS
                                        ▲        ▲          ▲
                               hardware │   fake │    software│
                               (RoC on  │  (chip │   (mdadm/  │
@@ -84,13 +86,36 @@ Dischi (SATA/SAS/NVMe) → Backplane → HBA → [PCIe bus] → CPU → OS
 **Game consequence:** the player does not label the RAID type — they *place the engine on the
 path*, and the placement **is** the type.
 
+### The two views, and how they bridge — **the disk is the shared atom** (Option 2)
+
+The two axes are orthogonal *in the model*, but the player sees them as **two views of one build**,
+and the views must visibly be about the *same* disks. The bridge:
+
+> **[DECISION — CONFIRMED 2026-06-02]** A disk is **one entity with one identity**, created once
+> and present in **both** views — never dragged twice. In the **data view** you group it into the
+> array tree; in the **physical view** it sits at the base of the control path. The conceptual
+> weld is the **RAID engine**: the layout you compose in the data view is *what the engine
+> computes*, and *where* the engine sits on the physical path *is* the type (hw/sw/fake).
+
+**v1 simplification — no manual disk-wiring.** The only per-disk physical wiring the constraints
+(§6) would demand is: *NVMe bypasses the backplane* (hard, but determined by the disk's
+**protocol**, already chosen at creation → the disk auto-routes: SATA/SAS → backplane, NVMe → PCIe)
+and *span across different backplanes* (soft, **deferred** — §9.4). So in v1 the disk appears in
+both views from a single drag and routes itself; the physical view's interaction stays on what
+teaches — **engine placement and OS choice**. Manual disk-routing arrives only with the deferred
+backplane-diversity module.
+
+> Rejected alternatives: a single "drive group" plug node (can't express per-disk constraints like
+> NVMe-bypass) and a fully merged single canvas (largest UX rework, breaks the additive property).
+> Option 2 expresses the per-disk constraints *and* stays additive.
+
 ---
 
 ## 3. The data model — one recursive tree
 
 The single most important decision. An **array** does not contain disks; it contains **members**,
 and a member is **either a disk or another array**. Recursion gives nested RAID (10, 50, 60, 6+0)
-*for free* — build the mattone once, compose forever.
+*for free* — build the brick once, compose forever.
 
 An array's "layout" is **two orthogonal choices**, not one (this drives the step-by-step prompt
 gameplay: *step 1 — how do you segment? step 2 — how do you protect?*):
@@ -98,10 +123,11 @@ gameplay: *step 1 — how do you segment? step 2 — how do you protect?*):
 ```
 Node =
   | Disk  { id, sizeGB, protocol: SATA|SAS|NVMe, backplaneId }
-  | Array { segmentation, redundancy, members: Node[], algorithm? }
+  | Array { segmentation, redundancy, members: Node[], algorithm?, copies? }
 
 segmentation ∈ { striped, linear }                  ← how data is split across members
 redundancy   ∈ { none, mirror, parity1, parity2 }   ← how data is protected
+copies       ∈ { 2 }   (mirror only, default 2)     ← replication factor for flat RAID 10 (§3a)
 ```
 
 **The two axes are independent, and drive different derived properties:**
@@ -109,7 +135,7 @@ redundancy   ∈ { none, mirror, parity1, parity2 }   ← how data is protected
 | Choice | Drives |
 |--------|--------|
 | **segmentation** | the *name* (`striped+none` = RAID 0 vs `linear+none` = JBOD) and the placement **animation** |
-| **redundancy** | **capacity** and **fault tolerance** — segmentation does not affect these |
+| **redundancy** (+ `copies`) | **capacity** and **fault tolerance**. One exception: `mirror` reads segmentation — `striped+mirror` = flat **RAID 10** (copies 2), distinct from `linear+mirror` = RAID 1. See §3a. |
 
 - `Array.members` may be `Disk`s (a leaf array, e.g. a single RAID-5 span) or other `Array`s
   (a nesting array, e.g. the RAID-0 stripe over two RAID-5 spans → RAID 50).
@@ -126,7 +152,38 @@ Array { striped, none }                                ← top: RAID 0 across sp
  └─ Array { striped, parity1, algo: right-asymmetric, members: [D5,D6,D7,D8] }   ← span B (RAID 5)
 ```
 
-Same shape with `parity1`→`parity2` is RAID 60; with spans `linear+mirror` it is RAID 10.
+Same shape with `parity1`→`parity2` is RAID 60. A stripe over `linear+mirror` spans is **RAID 1+0**
+(the manual nesting) — still recognized as RAID 10, but the *canonical* flat RAID 10 is a single
+array (§3a), which is the form that carries the near/far/offset layout.
+
+### 3a. RAID 10 is flat, not nested — **[DECISION — CONFIRMED 2026-06-02]**
+
+mdadm treats RAID 10 as its **own level**, not RAID 1 nested in RAID 0 — precisely so it can offer
+the **near / far / offset** layouts, which spread the 2 copies across *all* disks in ways that do
+**not** decompose into fixed mirror pairs (far/offset put a chunk's two copies on disks that are not
+a "pair"). So in our model RAID 10 is a **single** array:
+
+```
+Array { striped, mirror, copies: 2, algorithm: near|far|offset, members: [D0..D(n-1)] }
+```
+
+- **copies** = replication factor, fixed at **2** for v1 (field reserved for a future 3-way).
+- **capacity** = `sum(diskCaps) / copies` (≈ n/2 disks), **not** `min`. This is the one place the
+  *segmentation* axis changes capacity: `striped+mirror` (RAID 10) ≠ `linear+mirror` (RAID 1).
+- **fault tolerance** = `copies − 1` = 1 guaranteed.
+- **layout** = near (default) / far / offset — the **mirror-class** placement algorithm (§5b).
+- requires an **even** disk count; odd → RAID 1E (niche, non-standard).
+
+**RAID 50/60 stay nested** (a stripe over parity spans has no flat equivalent) — exactly mdadm's
+md-over-md. So the recursive tree and the nesting gesture (Stage A1/A2) remain essential; only
+RAID 10 collapses to a single flat node.
+
+**Flat RAID 10 vs nested RAID 1+0 — two real things, two names.** The classic stripe-over-mirror-pairs
+build (`striped+none` over `linear+mirror` spans) is the textbook **RAID 1+0** and is recognized under
+that *distinct* name. Its placement is **composed** (parent stripe over each span's mirror grid →
+reproduces `near`). The flat `striped+mirror` single array is **RAID 10** (mdadm's level), the only
+form that carries far/offset. Naming them apart is deliberate: most docs conflate the two, and that
+conflation is exactly what trips learners up — the game should not.
 
 ---
 
@@ -142,12 +199,14 @@ recognizer (first match wins):
 | `linear + mirror`, members = disks | **RAID 1** (n-way if >2 disks) |
 | `striped + parity1`, members = disks | **RAID 5** |
 | `striped + parity2`, members = disks | **RAID 6** |
-| `striped + none` over `mirror` spans | **RAID 10** (1+0) |
+| `striped + mirror`, members = disks, **even** count | **RAID 10** (flat, copies 2 — §3a) |
+| `striped + none` over `mirror` spans | **RAID 1+0** (nested — a *distinct* name from flat RAID 10) |
 | `striped + none` over `parity1` spans | **RAID 50** |
 | `striped + none` over `parity2` spans | **RAID 60** |
-| anything else (e.g. `striped + mirror` = RAID 1E family) | **custom / unrecognized** (sandbox still shows the data layout) |
+| `striped + mirror`, members = disks, **odd** count | **RAID 1E** (niche, non-standard) |
+| anything else | **custom / unrecognized** (sandbox still shows the data layout) |
 
-> **[DECISIONE — CONFERMATA]** A valid composition with no standard name is **allowed and
+> **[DECISION — CONFIRMED]** A valid composition with no standard name is **allowed and
 > animated** in sandbox: *anything without a violated constraint can be built.* The recognizer
 > emits an explicit status flag so the UI can react:
 >
@@ -159,6 +218,48 @@ recognizer (first match wins):
 >
 > The `unrecognized` flag is a **first-class result, not an error**: validation (constraints)
 > and recognition (naming) are separate steps. A build can be fully valid *and* unnamed.
+
+---
+
+## 4b. Deriving performance (axis B → throughput, *measurable*)
+
+> **[DECISION — CONFIRMED 2026-06-02]** Performance is a **first-class derived property**,
+> alongside capacity and fault-tolerance. It is computed from real, citable formulas — never
+> eyeballed — so that prompt-mode requirements like *"optimized for sequential reads"* become
+> checkable in the same outcome-based way as `faultTolerance >= 2` (the golden-table principle
+> applied to performance).
+
+Like capacity and fault-tolerance, performance **derives from the two axes**:
+
+| Quantity | Comes from | Values |
+|----------|-----------|--------|
+| **Write penalty** `W` | `redundancy` | none=1 · mirror=2 · parity1=4 · parity2=6 |
+| **Parallelism** `N` | `segmentation` | striped → many disks in parallel · linear → 1 at a time |
+
+`W` is the number of physical I/O ops per logical write: mirror writes each copy (2); parity1 does
+read-modify-write — read old data + old parity, write new data + new parity (4); parity2 adds the
+second parity Q (6). These values are the storage-design canon.
+
+The canonical **functional IOPS** formula:
+
+```
+IOPS_array = (N × IOPS_disk) / (read_frac + W × write_frac)
+```
+
+and the throughput multipliers vs a single disk: read ≈ N× (striping; mirror also lets reads fan
+out across copies), write ≈ N/W×.
+
+- **Composition (nesting):** performance composes over the tree like capacity does — RAID 10 =
+  stripe over mirrors → stripe width drives read, `W=2` keeps writes cheap (why it beats RAID 5/6
+  for write-heavy DB loads); RAID 50/60 inherit the parity write penalty.
+- **Sequential vs random — the one nuance.** `W` dominates *random small* writes; on *large
+  sequential full-stripe* writes RAID 5/6 compute parity once per stripe and the penalty nearly
+  vanishes. Challenges distinguish "sequential" from generic load, so the model exposes **two
+  characterizations** (sequential + random) rather than collapsing to one.
+
+**Engine surface:** `model.analyze()` gains `readClass` / `writeClass` (buckets of the
+formula-computed multiplier — the formula is the authoritative source, the bucket is presentation).
+Implemented in Stage B, with the high/medium/low thresholds pinned to a citable reference.
 
 ---
 
@@ -229,7 +330,7 @@ placement:                            # the two-step rule, as data
     wrap: true                        # wrap-around at right edge
 ```
 
-> **[DECISIONE — CONFERMATA]** The engine has a small library of **parametric placement
+> **[DECISION — CONFIRMED]** The engine has a small library of **parametric placement
 > primitives** (`stripe`, `mirror-near/far/offset`, `parity-rotate`) that read these descriptors.
 > A *variant* algorithm = a new file. A *radically new* placement = a new file + a new primitive.
 > ~90% data-driven, not 100% — accepted.
@@ -255,7 +356,7 @@ placement:                            # the two-step rule, as data
 **Two distinct "non-standard" concepts — do not conflate:**
 
 - **Non-standard NAME** comes from the *topology* (`segmentation + redundancy + nesting shape`), e.g.
-  `striped+mirror` (RAID 1E family) or stripe-over-stripes. This is the legitimate answer-engine case
+  an odd-count `striped+mirror` (RAID 1E) or stripe-over-stripes. This is the legitimate answer-engine case
   (§4): a valid build with no canonical name → `flag: 'non-standard-config'`.
 - **The algorithm never affects the name.** A RAID 5 with right-asymmetric is still RAID 5 — same
   topology, different placement. Algorithm changes only *how* data lands (and the animation).
@@ -296,10 +397,11 @@ a central rulebook — that's what keeps "add a file" honest.
 | mirror needs even disk count (odd → RAID 1E, niche) | `distribuzione-segmenti-algoritmi.md` | hard |
 | RAID engine must sit at exactly one point on the path | RIEPILOGO image | hard (determines hw/sw/fake) |
 | NVMe bypasses backplane + controller | `protocolli-dischi.md` | hard |
+| RAID 10 `near/far/offset` layout requires **software RAID / Linux** (mdadm); hw/fake → nested 1+0 only; Windows Storage Spaces → its own flat scheme (columns/copies, not near/far/offset) | cross-axis: control path **gates** the layout menu | hard |
 | members of a span *should* span different backplanes | `terminologia.md` | **soft** (best practice / warning) |
 | hot-spare capacity ≥ coerced capacity of failed disk | `terminologia.md` | runtime module — deferred |
 
-**[DECISIONE]** Prompt mode *blocks* on hard constraints step-by-step; sandbox *allows the
+**[DECISION]** Prompt mode *blocks* on hard constraints step-by-step; sandbox *allows the
 mistake* and explains why it's invalid. Same validator, different enforcement timing. Soft
 constraints are warnings in both. Confirm.
 
@@ -317,11 +419,11 @@ placement, then data fill with wrap-around) are exactly what the animator must r
 two-span example there is the RAID-50 case from §3.
 
 **The placement domain is narrower than the recognizer domain.** `model.js` names (or flags) *any*
-topology and always derives capacity + fault tolerance (they depend on redundancy alone). But a
+topology and always derives capacity + fault tolerance (they depend on redundancy + `copies`). But a
 data *placement* exists only where it is real and golden-verifiable. So a build can be valid,
 non-standard-named, with defined capacity/FT — yet have **no defined placement** (e.g.
-`linear+parity1`: parity needs a stripe to be computed over; `striped+mirror`: RAID 1E, not yet
-verified). In those cases `computePlacement` returns `{unsupported, reason}` and the UI shows the
+`linear+parity1`: parity needs a stripe to be computed over; an odd-count `striped+mirror` (RAID 1E):
+not yet verified). In those cases `computePlacement` returns `{unsupported, reason}` and the UI shows the
 reason — it never invents a fake grid. Faithfulness over coverage.
 
 ---
@@ -352,6 +454,10 @@ Virtual Drive (VD) ← logical volume exposed to the OS
 3. ~~**[§6]** Prompt = block step-by-step, sandbox = allow + explain?~~ **RESOLVED: yes** (exact UI to be designed later).
 4. ~~Component granularity: model backplane-diversity?~~ **RESOLVED:** backplane exists as a path node from v1; the **diversity soft-rule is deferred** (additive — a file + one soft constraint, touches nothing in the core).
 5. ~~Migration: rebuild Build tab or new tab?~~ **RESOLVED: build new.** No retrofit of the linear quiz. Reuse `styles.css` + the shared infrastructure (YAML loader, popup, KaTeX) only — those are engine, not quiz. The quiz is retired.
+6. ~~**[§5c]** Challenge model: match a target RAID level, or satisfy requirements?~~ **RESOLVED: requirement-satisfaction.** A challenge states *requirements over derived outcomes* (FT, capacity, performance), and **any** topology meeting them wins — multiple valid solutions, no "one right level." The existing `targetRaid`/`failureMessages` YAMLs are old-model and get rewritten.
+7. ~~**[§4b]** How to treat performance in requirements (it's qualitative)?~~ **RESOLVED: make it measurable.** Real formulas (write-penalty + parallelism → IOPS) derive `readClass`/`writeClass`; "optimize for X" becomes an outcome check like FT/capacity. Source-pinned in Stage B.
+8. ~~**[§2]** How do the data view and physical view bridge?~~ **RESOLVED: Option 2 — the disk is the shared atom.** One drag, two views, auto-routing by protocol in v1; the engine is the conceptual weld. (Rejected: drive-group-plug, full-merge.)
+9. ~~**[§3a]** RAID 10 nested or flat?~~ **RESOLVED: flat.** A single `striped+mirror` array (copies 2) — the mdadm model — so near/far/offset are real, selectable layouts (they don't decompose into mirror pairs). near/far/offset are the **mirror-class** placement algorithms, siblings of the parity-class (left/right × sym/asym): one `algorithm` slot per array, options scoped by redundancy, never combined. RAID 50/60 stay nested. Motive: the flat model teaches the *real* RAID 10 — and a game that teaches the real thing is the point.
 
 ---
 
@@ -385,3 +491,46 @@ Each phase ends in something runnable.
 | **4 — Control path** (axis A) | Place disks→backplane→HBA→engine→OS; engine placement ⇒ hardware/software/fake (§2). Backplane = single node (diversity deferred). | The hw/sw/fake distinction the author cares about. |
 | **5 — Constraints + two modes** | Validator (hard/soft, §6); sandbox = allow + explain; prompt = block step-by-step + "client" scenarios. | Turns the builder into a *game*. |
 | **— Deferred module** | Runtime: drive states, hot-spare rebuild, failure simulation (`drive-states.md`). Backplane diversity soft-rule. | Separate axis (§2); additive, not blocking. |
+
+### Status & replanned detail (2026-06-02)
+
+**Phases 0–4 are implemented and merged to `main`** (29 commits, prior branch
+`feature/raid-sandbox-domain-model`): recursive model + recognizer (1), layout + animation
+(2 — left-symmetric + 4 verified parity algorithms), the non-nested canvas build (3), and the
+physical control path (4). All engine tests green.
+
+The remaining work was **replanned** into runnable stages. Current branch:
+`feature/raid-shared-disks-nested` (Stage A); Phase 5 gets its own branch after A merges.
+
+```
+A · SHARED DISKS + NESTED            ← foundation + completes phases 2/3 for nesting
+   A0  bridge (Option 2, §2): the disk is the shared atom across both views, auto-routed
+   A1  array-onto-array gesture (controller drop dispatch — the "no-op in Phase 3" door)
+   A2  visual nesting: a parent container wrapping the sub-arrays in the data view
+   A3  RAID 10 → FLAT (§3a): model.js recognizes striped+mirror+disks (even) as RAID 10
+       (copies 2; capacity sum/2; FT 1); UI offers near/far/offset on a mirror array;
+       placeRaid10() lays out near/far/offset over the flat disks, verified vs
+       layout-raid10-reference.js. (RAID 50/60 placement = compose nested spans — later.)
+
+B · PERFORMANCE, MEASURABLE          ← §4b: readClass/writeClass from formula, source-pinned; seq vs random
+
+C · VALIDATOR (Phase 5 core)         ← validator.js (pure) → {hard, soft}; composed into evaluate()
+                                        → `violations`. All fundamental §6 constraints, incl. the
+                                        per-disk ones A0 makes expressible.
+
+D · TWO MODES (Phase 5 game layer)   ← sandbox: violations shown live ("does this make sense?");
+                                        requirement-based challenge schema (replaces the retired
+                                        targetRaid/failureMessages YAMLs); checkChallenge() win-check
+                                        ON TOP of evaluate(); prompt-mode UI.
+
+E · INTEGRATION + DISCOVERABILITY    ← the ship: retire the linear quiz, AND add the game URL
+                                        (/games/raid/) to sitemap.xml — currently only the homepage
+                                        is listed, so the game is invisible to Google. Add at ship
+                                        time, not before (else it points crawlers at the dead quiz).
+```
+
+**Architectural commitments from the replan:** `evaluate()` is loose, read-only orchestration;
+new logic goes in its own pure module and only *attaches* output to the result object (the pattern
+that already bolted on the physical layer). The recursive tree means nesting needs **additions, not
+rewrites** — model/recognizer/compile already recurse; only the gesture, the visual, and
+`placeRaid10()` are new.

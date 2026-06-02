@@ -54,8 +54,10 @@ resource-file approach hold.
 | **A. Control path** | disks → backplane → HBA → RAID engine → PCIe → CPU → OS | hardware / software / fake RAID + which OS | `hardware/software/fake-raid.md`, `protocolli-dischi.md`, RIEPILOGO image |
 | **B. Data layout** | striping, mirror, parity, placement algorithm, nesting | the RAID *level* + the **animation** | `distribuzione-segmenti-algoritmi.md`, `segment-allocation-rule-left-symmetric.md`, `nested-raids.md` |
 
-They are orthogonal: *RAID 6 left-symmetric* can run on hardware **or** software. A build is
-**a control path (axis A) carrying a data layout (axis B).**
+They are orthogonal *at the level granularity*: *RAID 6 left-symmetric* can run on hardware **or**
+software. A build is **a control path (axis A) carrying a data layout (axis B).** But the axes
+**interact on the algorithm menu**: the control path *gates which layout algorithms are available*
+(see §6) — e.g. RAID 10 `near/far/offset` exist only under Linux software RAID (mdadm).
 
 A **third axis — runtime behavior** (drive states, hot-spare rebuild, failure simulation;
 `drive-states.md`) — is explicitly **out of scope** for v1, designed as a separate future module.
@@ -176,6 +178,13 @@ Array { striped, mirror, copies: 2, algorithm: near|far|offset, members: [D0..D(
 md-over-md. So the recursive tree and the nesting gesture (Stage A1/A2) remain essential; only
 RAID 10 collapses to a single flat node.
 
+**Flat RAID 10 vs nested RAID 1+0 — two real things, two names.** The classic stripe-over-mirror-pairs
+build (`striped+none` over `linear+mirror` spans) is the textbook **RAID 1+0** and is recognized under
+that *distinct* name. Its placement is **composed** (parent stripe over each span's mirror grid →
+reproduces `near`). The flat `striped+mirror` single array is **RAID 10** (mdadm's level), the only
+form that carries far/offset. Naming them apart is deliberate: most docs conflate the two, and that
+conflation is exactly what trips learners up — the game should not.
+
 ---
 
 ## 4. Deriving the RAID level (axis B → name)
@@ -191,7 +200,7 @@ recognizer (first match wins):
 | `striped + parity1`, members = disks | **RAID 5** |
 | `striped + parity2`, members = disks | **RAID 6** |
 | `striped + mirror`, members = disks, **even** count | **RAID 10** (flat, copies 2 — §3a) |
-| `striped + none` over `mirror` spans | **RAID 10** (the manual 1+0 nesting) |
+| `striped + none` over `mirror` spans | **RAID 1+0** (nested — a *distinct* name from flat RAID 10) |
 | `striped + none` over `parity1` spans | **RAID 50** |
 | `striped + none` over `parity2` spans | **RAID 60** |
 | `striped + mirror`, members = disks, **odd** count | **RAID 1E** (niche, non-standard) |
@@ -388,6 +397,7 @@ a central rulebook — that's what keeps "add a file" honest.
 | mirror needs even disk count (odd → RAID 1E, niche) | `distribuzione-segmenti-algoritmi.md` | hard |
 | RAID engine must sit at exactly one point on the path | RIEPILOGO image | hard (determines hw/sw/fake) |
 | NVMe bypasses backplane + controller | `protocolli-dischi.md` | hard |
+| RAID 10 `near/far/offset` layout requires **software RAID / Linux** (mdadm); hw/fake → nested 1+0 only; Windows Storage Spaces → its own flat scheme (columns/copies, not near/far/offset) | cross-axis: control path **gates** the layout menu | hard |
 | members of a span *should* span different backplanes | `terminologia.md` | **soft** (best practice / warning) |
 | hot-spare capacity ≥ coerced capacity of failed disk | `terminologia.md` | runtime module — deferred |
 

@@ -1,7 +1,9 @@
 # ---- Session / personal (never tracked) ----
 .personal/
-.development/
 .memory-bank/
+
+# NOTE: .development/ is now tracked (design docs live with the code).
+# Only specific files are committed for now; the rest stays untracked until reviewed.
 
 # ---- Shell & system dotfiles ----
 .bash_profile

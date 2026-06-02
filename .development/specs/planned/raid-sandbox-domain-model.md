@@ -121,10 +121,11 @@ gameplay: *step 1 — how do you segment? step 2 — how do you protect?*):
 ```
 Node =
   | Disk  { id, sizeGB, protocol: SATA|SAS|NVMe, backplaneId }
-  | Array { segmentation, redundancy, members: Node[], algorithm? }
+  | Array { segmentation, redundancy, members: Node[], algorithm?, copies? }
 
 segmentation ∈ { striped, linear }                  ← how data is split across members
 redundancy   ∈ { none, mirror, parity1, parity2 }   ← how data is protected
+copies       ∈ { 2 }   (mirror only, default 2)     ← replication factor for flat RAID 10 (§3a)
 ```
 
 **The two axes are independent, and drive different derived properties:**
@@ -132,7 +133,7 @@ redundancy   ∈ { none, mirror, parity1, parity2 }   ← how data is protected
 | Choice | Drives |
 |--------|--------|
 | **segmentation** | the *name* (`striped+none` = RAID 0 vs `linear+none` = JBOD) and the placement **animation** |
-| **redundancy** | **capacity** and **fault tolerance** — segmentation does not affect these |
+| **redundancy** (+ `copies`) | **capacity** and **fault tolerance**. One exception: `mirror` reads segmentation — `striped+mirror` = flat **RAID 10** (copies 2), distinct from `linear+mirror` = RAID 1. See §3a. |
 
 - `Array.members` may be `Disk`s (a leaf array, e.g. a single RAID-5 span) or other `Array`s
   (a nesting array, e.g. the RAID-0 stripe over two RAID-5 spans → RAID 50).
@@ -149,7 +150,31 @@ Array { striped, none }                                ← top: RAID 0 across sp
  └─ Array { striped, parity1, algo: right-asymmetric, members: [D5,D6,D7,D8] }   ← span B (RAID 5)
 ```
 
-Same shape with `parity1`→`parity2` is RAID 60; with spans `linear+mirror` it is RAID 10.
+Same shape with `parity1`→`parity2` is RAID 60. A stripe over `linear+mirror` spans is **RAID 1+0**
+(the manual nesting) — still recognized as RAID 10, but the *canonical* flat RAID 10 is a single
+array (§3a), which is the form that carries the near/far/offset layout.
+
+### 3a. RAID 10 is flat, not nested — **[DECISION — CONFIRMED 2026-06-02]**
+
+mdadm treats RAID 10 as its **own level**, not RAID 1 nested in RAID 0 — precisely so it can offer
+the **near / far / offset** layouts, which spread the 2 copies across *all* disks in ways that do
+**not** decompose into fixed mirror pairs (far/offset put a chunk's two copies on disks that are not
+a "pair"). So in our model RAID 10 is a **single** array:
+
+```
+Array { striped, mirror, copies: 2, algorithm: near|far|offset, members: [D0..D(n-1)] }
+```
+
+- **copies** = replication factor, fixed at **2** for v1 (field reserved for a future 3-way).
+- **capacity** = `sum(diskCaps) / copies` (≈ n/2 disks), **not** `min`. This is the one place the
+  *segmentation* axis changes capacity: `striped+mirror` (RAID 10) ≠ `linear+mirror` (RAID 1).
+- **fault tolerance** = `copies − 1` = 1 guaranteed.
+- **layout** = near (default) / far / offset — the **mirror-class** placement algorithm (§5b).
+- requires an **even** disk count; odd → RAID 1E (niche, non-standard).
+
+**RAID 50/60 stay nested** (a stripe over parity spans has no flat equivalent) — exactly mdadm's
+md-over-md. So the recursive tree and the nesting gesture (Stage A1/A2) remain essential; only
+RAID 10 collapses to a single flat node.
 
 ---
 
@@ -165,10 +190,12 @@ recognizer (first match wins):
 | `linear + mirror`, members = disks | **RAID 1** (n-way if >2 disks) |
 | `striped + parity1`, members = disks | **RAID 5** |
 | `striped + parity2`, members = disks | **RAID 6** |
-| `striped + none` over `mirror` spans | **RAID 10** (1+0) |
+| `striped + mirror`, members = disks, **even** count | **RAID 10** (flat, copies 2 — §3a) |
+| `striped + none` over `mirror` spans | **RAID 10** (the manual 1+0 nesting) |
 | `striped + none` over `parity1` spans | **RAID 50** |
 | `striped + none` over `parity2` spans | **RAID 60** |
-| anything else (e.g. `striped + mirror` = RAID 1E family) | **custom / unrecognized** (sandbox still shows the data layout) |
+| `striped + mirror`, members = disks, **odd** count | **RAID 1E** (niche, non-standard) |
+| anything else | **custom / unrecognized** (sandbox still shows the data layout) |
 
 > **[DECISION — CONFIRMED]** A valid composition with no standard name is **allowed and
 > animated** in sandbox: *anything without a violated constraint can be built.* The recognizer
@@ -320,7 +347,7 @@ placement:                            # the two-step rule, as data
 **Two distinct "non-standard" concepts — do not conflate:**
 
 - **Non-standard NAME** comes from the *topology* (`segmentation + redundancy + nesting shape`), e.g.
-  `striped+mirror` (RAID 1E family) or stripe-over-stripes. This is the legitimate answer-engine case
+  an odd-count `striped+mirror` (RAID 1E) or stripe-over-stripes. This is the legitimate answer-engine case
   (§4): a valid build with no canonical name → `flag: 'non-standard-config'`.
 - **The algorithm never affects the name.** A RAID 5 with right-asymmetric is still RAID 5 — same
   topology, different placement. Algorithm changes only *how* data lands (and the animation).
@@ -382,11 +409,11 @@ placement, then data fill with wrap-around) are exactly what the animator must r
 two-span example there is the RAID-50 case from §3.
 
 **The placement domain is narrower than the recognizer domain.** `model.js` names (or flags) *any*
-topology and always derives capacity + fault tolerance (they depend on redundancy alone). But a
+topology and always derives capacity + fault tolerance (they depend on redundancy + `copies`). But a
 data *placement* exists only where it is real and golden-verifiable. So a build can be valid,
 non-standard-named, with defined capacity/FT — yet have **no defined placement** (e.g.
-`linear+parity1`: parity needs a stripe to be computed over; `striped+mirror`: RAID 1E, not yet
-verified). In those cases `computePlacement` returns `{unsupported, reason}` and the UI shows the
+`linear+parity1`: parity needs a stripe to be computed over; an odd-count `striped+mirror` (RAID 1E):
+not yet verified). In those cases `computePlacement` returns `{unsupported, reason}` and the UI shows the
 reason — it never invents a fake grid. Faithfulness over coverage.
 
 ---
@@ -420,6 +447,7 @@ Virtual Drive (VD) ← logical volume exposed to the OS
 6. ~~**[§5c]** Challenge model: match a target RAID level, or satisfy requirements?~~ **RESOLVED: requirement-satisfaction.** A challenge states *requirements over derived outcomes* (FT, capacity, performance), and **any** topology meeting them wins — multiple valid solutions, no "one right level." The existing `targetRaid`/`failureMessages` YAMLs are old-model and get rewritten.
 7. ~~**[§4b]** How to treat performance in requirements (it's qualitative)?~~ **RESOLVED: make it measurable.** Real formulas (write-penalty + parallelism → IOPS) derive `readClass`/`writeClass`; "optimize for X" becomes an outcome check like FT/capacity. Source-pinned in Stage B.
 8. ~~**[§2]** How do the data view and physical view bridge?~~ **RESOLVED: Option 2 — the disk is the shared atom.** One drag, two views, auto-routing by protocol in v1; the engine is the conceptual weld. (Rejected: drive-group-plug, full-merge.)
+9. ~~**[§3a]** RAID 10 nested or flat?~~ **RESOLVED: flat.** A single `striped+mirror` array (copies 2) — the mdadm model — so near/far/offset are real, selectable layouts (they don't decompose into mirror pairs). near/far/offset are the **mirror-class** placement algorithms, siblings of the parity-class (left/right × sym/asym): one `algorithm` slot per array, options scoped by redundancy, never combined. RAID 50/60 stay nested. Motive: the flat model teaches the *real* RAID 10 — and a game that teaches the real thing is the point.
 
 ---
 
@@ -469,8 +497,10 @@ A · SHARED DISKS + NESTED            ← foundation + completes phases 2/3 for 
    A0  bridge (Option 2, §2): the disk is the shared atom across both views, auto-routed
    A1  array-onto-array gesture (controller drop dispatch — the "no-op in Phase 3" door)
    A2  visual nesting: a parent container wrapping the sub-arrays in the data view
-   A3  placeRaid10() in layout.js (the branch behind the "leaf arrays only (v1)" guard),
-       verified against layout-raid10-reference.js golden tables
+   A3  RAID 10 → FLAT (§3a): model.js recognizes striped+mirror+disks (even) as RAID 10
+       (copies 2; capacity sum/2; FT 1); UI offers near/far/offset on a mirror array;
+       placeRaid10() lays out near/far/offset over the flat disks, verified vs
+       layout-raid10-reference.js. (RAID 50/60 placement = compose nested spans — later.)
 
 B · PERFORMANCE, MEASURABLE          ← §4b: readClass/writeClass from formula, source-pinned; seq vs random
 

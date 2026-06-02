@@ -1,8 +1,8 @@
 # RAID Sandbox — Domain Model (design backbone)
 
-**Status:** planned · first draft for review
-**Date:** 2026-06-01
-**Branch:** `feature/raid-sandbox-domain-model`
+**Status:** active · phases 0–4 implemented & merged · remaining work replanned 2026-06-02
+**Date:** 2026-06-01 (replanned 2026-06-02)
+**Branch (current):** `feature/raid-shared-disks-nested` · prior: `feature/raid-sandbox-domain-model` (merged)
 **Source notes:** `.personal/*.md` + `.personal/IMG20260601163917.jpg` (RIEPILOGO diagram)
 
 > This is the *carta*: the model from which both the YAML resource files and the
@@ -84,6 +84,29 @@ Dischi (SATA/SAS/NVMe) → Backplane → HBA → [PCIe bus] → CPU → OS
 **Game consequence:** the player does not label the RAID type — they *place the engine on the
 path*, and the placement **is** the type.
 
+### The two views, and how they bridge — **the disk is the shared atom** (Option 2)
+
+The two axes are orthogonal *in the model*, but the player sees them as **two views of one build**,
+and the views must visibly be about the *same* disks. The bridge:
+
+> **[DECISIONE — CONFERMATA 2026-06-02]** A disk is **one entity with one identity**, created once
+> and present in **both** views — never dragged twice. In the **data view** you group it into the
+> array tree; in the **physical view** it sits at the base of the control path. The conceptual
+> weld is the **RAID engine**: the layout you compose in the data view is *what the engine
+> computes*, and *where* the engine sits on the physical path *is* the type (hw/sw/fake).
+
+**v1 simplification — no manual disk-wiring.** The only per-disk physical wiring the constraints
+(§6) would demand is: *NVMe bypasses the backplane* (hard, but determined by the disk's
+**protocol**, already chosen at creation → the disk auto-routes: SATA/SAS → backplane, NVMe → PCIe)
+and *span across different backplanes* (soft, **deferred** — §9.4). So in v1 the disk appears in
+both views from a single drag and routes itself; the physical view's interaction stays on what
+teaches — **engine placement and OS choice**. Manual disk-routing arrives only with the deferred
+backplane-diversity module.
+
+> Rejected alternatives: a single "drive group" plug node (can't express per-disk constraints like
+> NVMe-bypass) and a fully merged single canvas (largest UX rework, breaks the additive property).
+> Option 2 expresses the per-disk constraints *and* stays additive.
+
 ---
 
 ## 3. The data model — one recursive tree
@@ -159,6 +182,48 @@ recognizer (first match wins):
 >
 > The `unrecognized` flag is a **first-class result, not an error**: validation (constraints)
 > and recognition (naming) are separate steps. A build can be fully valid *and* unnamed.
+
+---
+
+## 4b. Deriving performance (axis B → throughput, *measurable*)
+
+> **[DECISIONE — CONFERMATA 2026-06-02]** Performance is a **first-class derived property**,
+> alongside capacity and fault-tolerance. It is computed from real, citable formulas — never
+> eyeballed — so that prompt-mode requirements like *"optimized for sequential reads"* become
+> checkable in the same outcome-based way as `faultTolerance >= 2` (the golden-table principle
+> applied to performance).
+
+Like capacity and fault-tolerance, performance **derives from the two axes**:
+
+| Quantity | Comes from | Values |
+|----------|-----------|--------|
+| **Write penalty** `W` | `redundancy` | none=1 · mirror=2 · parity1=4 · parity2=6 |
+| **Parallelism** `N` | `segmentation` | striped → many disks in parallel · linear → 1 at a time |
+
+`W` is the number of physical I/O ops per logical write: mirror writes each copy (2); parity1 does
+read-modify-write — read old data + old parity, write new data + new parity (4); parity2 adds the
+second parity Q (6). These values are the storage-design canon.
+
+The canonical **functional IOPS** formula:
+
+```
+IOPS_array = (N × IOPS_disk) / (read_frac + W × write_frac)
+```
+
+and the throughput multipliers vs a single disk: read ≈ N× (striping; mirror also lets reads fan
+out across copies), write ≈ N/W×.
+
+- **Composition (nesting):** performance composes over the tree like capacity does — RAID 10 =
+  stripe over mirrors → stripe width drives read, `W=2` keeps writes cheap (why it beats RAID 5/6
+  for write-heavy DB loads); RAID 50/60 inherit the parity write penalty.
+- **Sequential vs random — the one nuance.** `W` dominates *random small* writes; on *large
+  sequential full-stripe* writes RAID 5/6 compute parity once per stripe and the penalty nearly
+  vanishes. Challenges distinguish "sequential" from generic load, so the model exposes **two
+  characterizations** (sequential + random) rather than collapsing to one.
+
+**Engine surface:** `model.analyze()` gains `readClass` / `writeClass` (buckets of the
+formula-computed multiplier — the formula is the authoritative source, the bucket is presentation).
+Implemented in Stage B, with the high/medium/low thresholds pinned to a citable reference.
 
 ---
 
@@ -352,6 +417,9 @@ Virtual Drive (VD) ← logical volume exposed to the OS
 3. ~~**[§6]** Prompt = block step-by-step, sandbox = allow + explain?~~ **RESOLVED: yes** (exact UI to be designed later).
 4. ~~Component granularity: model backplane-diversity?~~ **RESOLVED:** backplane exists as a path node from v1; the **diversity soft-rule is deferred** (additive — a file + one soft constraint, touches nothing in the core).
 5. ~~Migration: rebuild Build tab or new tab?~~ **RESOLVED: build new.** No retrofit of the linear quiz. Reuse `styles.css` + the shared infrastructure (YAML loader, popup, KaTeX) only — those are engine, not quiz. The quiz is retired.
+6. ~~**[§5c]** Challenge model: match a target RAID level, or satisfy requirements?~~ **RESOLVED: requirement-satisfaction.** A challenge states *requirements over derived outcomes* (FT, capacity, performance), and **any** topology meeting them wins — multiple valid solutions, no "one right level." The existing `targetRaid`/`failureMessages` YAMLs are old-model and get rewritten.
+7. ~~**[§4b]** How to treat performance in requirements (it's qualitative)?~~ **RESOLVED: make it measurable.** Real formulas (write-penalty + parallelism → IOPS) derive `readClass`/`writeClass`; "optimize for X" becomes an outcome check like FT/capacity. Source-pinned in Stage B.
+8. ~~**[§2]** How do the data view and physical view bridge?~~ **RESOLVED: Option 2 — the disk is the shared atom.** One drag, two views, auto-routing by protocol in v1; the engine is the conceptual weld. (Rejected: drive-group-plug, full-merge.)
 
 ---
 
@@ -385,3 +453,44 @@ Each phase ends in something runnable.
 | **4 — Control path** (axis A) | Place disks→backplane→HBA→engine→OS; engine placement ⇒ hardware/software/fake (§2). Backplane = single node (diversity deferred). | The hw/sw/fake distinction the author cares about. |
 | **5 — Constraints + two modes** | Validator (hard/soft, §6); sandbox = allow + explain; prompt = block step-by-step + "client" scenarios. | Turns the builder into a *game*. |
 | **— Deferred module** | Runtime: drive states, hot-spare rebuild, failure simulation (`drive-states.md`). Backplane diversity soft-rule. | Separate axis (§2); additive, not blocking. |
+
+### Status & replanned detail (2026-06-02)
+
+**Phases 0–4 are implemented and merged to `main`** (29 commits, prior branch
+`feature/raid-sandbox-domain-model`): recursive model + recognizer (1), layout + animation
+(2 — left-symmetric + 4 verified parity algorithms), the non-nested canvas build (3), and the
+physical control path (4). All engine tests green.
+
+The remaining work was **replanned** into runnable stages. Current branch:
+`feature/raid-shared-disks-nested` (Stage A); Phase 5 gets its own branch after A merges.
+
+```
+A · SHARED DISKS + NESTED            ← foundation + completes phases 2/3 for nesting
+   A0  bridge (Option 2, §2): the disk is the shared atom across both views, auto-routed
+   A1  array-onto-array gesture (controller drop dispatch — the "no-op in Phase 3" door)
+   A2  visual nesting: a parent container wrapping the sub-arrays in the data view
+   A3  placeRaid10() in layout.js (the branch behind the "leaf arrays only (v1)" guard),
+       verified against layout-raid10-reference.js golden tables
+
+B · PERFORMANCE, MEASURABLE          ← §4b: readClass/writeClass from formula, source-pinned; seq vs random
+
+C · VALIDATOR (Phase 5 core)         ← validator.js (pure) → {hard, soft}; composed into evaluate()
+                                        → `violations`. All fundamental §6 constraints, incl. the
+                                        per-disk ones A0 makes expressible.
+
+D · TWO MODES (Phase 5 game layer)   ← sandbox: violations shown live ("does this make sense?");
+                                        requirement-based challenge schema (replaces the retired
+                                        targetRaid/failureMessages YAMLs); checkChallenge() win-check
+                                        ON TOP of evaluate(); prompt-mode UI.
+
+E · INTEGRATION + DISCOVERABILITY    ← the ship: retire the linear quiz, AND add the game URL
+                                        (/games/raid/) to sitemap.xml — currently only the homepage
+                                        is listed, so the game is invisible to Google. Add at ship
+                                        time, not before (else it points crawlers at the dead quiz).
+```
+
+**Architectural commitments from the replan:** `evaluate()` is loose, read-only orchestration;
+new logic goes in its own pure module and only *attaches* output to the result object (the pattern
+that already bolted on the physical layer). The recursive tree means nesting needs **additions, not
+rewrites** — model/recognizer/compile already recurse; only the gesture, the visual, and
+`placeRaid10()` are new.

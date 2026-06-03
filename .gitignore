@@ -18,6 +18,7 @@
 # ---- IDE ----
 .idea
 .vscode
+.vs
 
 # ---- Claude Code local / runtime files ----
 .mcp.json

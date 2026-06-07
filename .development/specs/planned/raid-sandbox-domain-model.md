@@ -1,6 +1,6 @@
 # RAID Sandbox — Domain Model (design backbone)
 
-**Status:** active · phases 0–4 implemented & merged · remaining work replanned 2026-06-02
+**Status:** COMPLETE — phases 0–5 implemented · Stage A/E merged · Phase 5 (B/C/D) on `feature/raid-phase5-game` (2026-06-07)
 **Date:** 2026-06-01 (replanned 2026-06-02)
 **Branch (current):** `feature/raid-shared-disks-nested` · prior: `feature/raid-sandbox-domain-model` (merged)
 **Source notes:** `.personal/*.md` + `.personal/IMG20260601163917.jpg` (RIEPILOGO diagram)
@@ -454,7 +454,7 @@ Virtual Drive (VD) ← logical volume exposed to the OS
 3. ~~**[§6]** Prompt = block step-by-step, sandbox = allow + explain?~~ **RESOLVED: yes** (exact UI to be designed later).
 4. ~~Component granularity: model backplane-diversity?~~ **RESOLVED:** backplane exists as a path node from v1; the **diversity soft-rule is deferred** (additive — a file + one soft constraint, touches nothing in the core).
 5. ~~Migration: rebuild Build tab or new tab?~~ **RESOLVED: build new.** No retrofit of the linear quiz. Reuse `styles.css` + the shared infrastructure (YAML loader, popup, KaTeX) only — those are engine, not quiz. The quiz is retired.
-6. ~~**[§5c]** Challenge model: match a target RAID level, or satisfy requirements?~~ **RESOLVED: requirement-satisfaction.** A challenge states *requirements over derived outcomes* (FT, capacity, performance), and **any** topology meeting them wins — multiple valid solutions, no "one right level." The existing `targetRaid`/`failureMessages` YAMLs are old-model and get rewritten.
+6. ~~**[§5c]** Challenge model: match a target RAID level, or satisfy requirements?~~ **RESOLVED: requirement-satisfaction.** A challenge states *requirements over derived outcomes*, and **any** topology meeting them wins — multiple valid solutions, no "one right level." The `targetRaid`/`failureMessages` YAMLs were rewritten. **Final shape (implemented, see §11a):** the challenge YAML is the *single source of truth*; `requirements` is a **complete record** keyed by every metric in a fixed vocabulary (each entry a constraint or the literal `any`), read generically. The disk supply is expressed *as requirements* (`diskCount`, `rawCapacityGB`) — the palette is **not** restricted, because interpreting the brief is part of the challenge. `validateChallenge` + `challenge-data.test.js` make a malformed challenge fail loudly instead of shipping as a silently-unwinnable level. No `successMessage`: a generic win banner only (naming a level would contradict "any topology wins").
 7. ~~**[§4b]** How to treat performance in requirements (it's qualitative)?~~ **RESOLVED: make it measurable.** Real formulas (write-penalty + parallelism → IOPS) derive `readClass`/`writeClass`; "optimize for X" becomes an outcome check like FT/capacity. Source-pinned in Stage B.
 8. ~~**[§2]** How do the data view and physical view bridge?~~ **RESOLVED: Option 2 — the disk is the shared atom.** One drag, two views, auto-routing by protocol in v1; the engine is the conceptual weld. (Rejected: drive-group-plug, full-merge.)
 9. ~~**[§3a]** RAID 10 nested or flat?~~ **RESOLVED: flat.** A single `striped+mirror` array (copies 2) — the mdadm model — so near/far/offset are real, selectable layouts (they don't decompose into mirror pairs). near/far/offset are the **mirror-class** placement algorithms, siblings of the parity-class (left/right × sym/asym): one `algorithm` slot per array, options scoped by redundancy, never combined. RAID 50/60 stay nested. Motive: the flat model teaches the *real* RAID 10 — and a game that teaches the real thing is the point.
@@ -534,3 +534,72 @@ new logic goes in its own pure module and only *attaches* output to the result o
 that already bolted on the physical layer). The recursive tree means nesting needs **additions, not
 rewrites** — model/recognizer/compile already recurse; only the gesture, the visual, and
 `placeRaid10()` are new.
+
+### Completion log
+
+- **Stage A, E — merged to `main`** (see git history): shared disks + nesting + flat RAID 10;
+  sandbox as the front door, linear quiz retired, sitemap updated.
+- **Phase 5 (B, C, D) — DONE 2026-06-07**, branch `feature/raid-phase5-game`:
+  - **B** `model.js` `analyze()` derives `readClass`/`writeClass` + a `performance{}` block
+    (write penalty W × parallelism N → multipliers vs one disk; `random` + `sequential`,
+    the §4b parity-amortization nuance). Nested arrays inherit the span's W. Also exposes
+    `rawCapacityGB` (sum of disk sizes) for challenge supply checks.
+  - **C** `validator.js` (pure) → `{hard, soft}`; §6 constraints (min-disks recursive, mirror-even,
+    NVMe-bypass, engine-single-point >1, cross-axis near/far/offset→Linux mdadm; backplane-diversity
+    dormant per §9.4). Attached to `evaluate()` as `violations` via a derived physical adapter —
+    no rewrite. Sandbox shows violations live (allow + explain).
+  - **D** requirement-satisfaction challenges (§9.6, schema in §11a); `challenge.js`
+    `checkChallenge()` + `validateChallenge()` on top of `evaluate()`. Prompt-mode UI in `canvas.html`
+    (mode dropdown Sandbox/Challenge, challenge list in the results panel, `?challenge=<id>`,
+    live requirement checklist + generic win banner). Scope (§9.3): explain-in-both-modes,
+    gate-the-win-in-prompt; step-by-step gesture blocking deferred.
+- **Hardening from in-browser review (same branch):**
+  - `evaluate()` now `_reconcile`s roots/members from ground truth before analyzing → the recognizer
+    survives any group/dissolve/remove/re-add history (was: a phantom root blocked recognition).
+    Fuzz-tested over 6000 random gestures (`canvas-state.fuzz.test.js`).
+  - Physical view disk layout reflows each render (was: positions drifted/overlapped after churn).
+  - `[hidden]{display:none !important}` so hidden panels actually hide over class `display` rules.
+  - `CanvasState.reset()` + a header **⟲ Clear** button (master clear, both modes).
+- **Deferred (unchanged):** runtime module (drive states, rebuild, failure sim), backplane
+  diversity, sequential-class challenge metrics (engine-complete, challenge-dormant in v1),
+  RAID 50/60 nested placement.
+
+**Awaiting:** a refactoring pass (planned, separate session) → then merge
+`feature/raid-phase5-game` → `main`. All engine tests green (134): model-perf 29 · validator 15 ·
+challenge 20 · challenge-data 13 · canvas-state 29 · canvas-state.fuzz 6 · layout-golden 16 ·
+canvas-algo-integration 6.
+
+### 11a. Challenge schema (v1, final — the contract for authoring challenges)
+
+A challenge file (`data/challenges/<id>.yaml`) is the **single source of truth**. The `prompt` is
+flavour; the machine reads only `requirements`.
+
+```yaml
+id: resilient                  # must equal the filename
+title: Large Archive, High Risk # must equal the index.yaml entry
+client: "Archivist, …"          # flavour (shown as 🗣)
+prompt: >                       # flavour brief — NOT checked
+  …six 4 TB disks… survive two simultaneous failures.
+requirements:                   # COMPLETE record: every vocabulary metric present
+  diskCount:      { op: '==', value: 6 }    # supply
+  rawCapacityGB:  { op: '==', value: 24 }   # supply  (6 × 4 TB)
+  capacityGB:     any                        # outcome (unconstrained → "any")
+  faultTolerance: { op: '>=', value: 2 }    # outcome
+  readClass:      any
+  writeClass:     any
+hint: …                         # flavour, revealed on demand
+```
+
+- **Vocabulary** (each must be a key in `RaidModel.analyze()`): `diskCount`, `rawCapacityGB`,
+  `capacityGB`, `faultTolerance`, `readClass`, `writeClass`. Defined once in `challenge.js`
+  (`METRIC_LABEL`/`KNOWN_METRICS`); adding a metric = add it there **and** in `analyze()`.
+- **Each entry** is `any` (unconstrained) or `{ op, value }` with `op ∈ >= · <= · == · in`
+  (`in` takes a list, e.g. `[high]`). The record must be **complete** (all metrics) with **≥1**
+  non-`any` constraint.
+- **Supply is a requirement, not a palette restriction** — the sidebar stays full; reading the
+  brief is part of the challenge. `diskCount` + `rawCapacityGB` pin "N disks of S TB".
+- **Win** = all requirements met AND no hard violation (`blockedBy`); shown as a generic banner.
+  No per-challenge `successMessage` (any valid topology wins, so naming a level would be wrong).
+- **Guard:** `challenge-data.test.js` runs `validateChallenge` over every real YAML (via pyyaml→json,
+  since the repo is zero-dependency) and checks `index.yaml` consistency — a malformed challenge
+  fails the test instead of shipping as a silently-unwinnable level.

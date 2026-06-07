@@ -1,6 +1,6 @@
 # RAID Sandbox — Domain Model (design backbone)
 
-**Status:** active · phases 0–4 implemented & merged · remaining work replanned 2026-06-02
+**Status:** COMPLETE — phases 0–5 implemented · Stage A/E merged · Phase 5 (B/C/D) on `feature/raid-phase5-game` (2026-06-07)
 **Date:** 2026-06-01 (replanned 2026-06-02)
 **Branch (current):** `feature/raid-shared-disks-nested` · prior: `feature/raid-sandbox-domain-model` (merged)
 **Source notes:** `.personal/*.md` + `.personal/IMG20260601163917.jpg` (RIEPILOGO diagram)
@@ -534,3 +534,28 @@ new logic goes in its own pure module and only *attaches* output to the result o
 that already bolted on the physical layer). The recursive tree means nesting needs **additions, not
 rewrites** — model/recognizer/compile already recurse; only the gesture, the visual, and
 `placeRaid10()` are new.
+
+### Completion log
+
+- **Stage A, E — merged to `main`** (see git history): shared disks + nesting + flat RAID 10;
+  sandbox as the front door, linear quiz retired, sitemap updated.
+- **Phase 5 (B, C, D) — DONE 2026-06-07**, branch `feature/raid-phase5-game` (4 commits):
+  - **B** `model.js` `analyze()` derives `readClass`/`writeClass` + a `performance{}` block
+    (write penalty W × parallelism N → multipliers vs one disk; `random` + `sequential`,
+    the §4b parity-amortization nuance). Nested arrays inherit the span's W. `model-perf.test.js` 29/29.
+  - **C** `validator.js` (pure) → `{hard, soft}`; §6 constraints (min-disks recursive, mirror-even,
+    NVMe-bypass, engine-single-point >1, cross-axis near/far/offset→Linux mdadm; backplane-diversity
+    dormant per §9.4). Attached to `evaluate()` as `violations` via a derived physical adapter —
+    no rewrite. Sandbox shows violations live (allow + explain). `validator.test.js` 15/15.
+  - **D** challenge YAMLs rewritten to requirement-satisfaction (§9.6); `challenge.js`
+    `checkChallenge()` on top of `evaluate()` (analysis + violations → `{satisfied, requirements,
+    blockedBy}`); `challenge.test.js` 10/10. Prompt-mode UI in `canvas.html` (mode dropdown,
+    `?challenge=<id>`, live requirement checklist + win banner). Scope (§9.3):
+    explain-in-both-modes, gate-the-win-in-prompt; step-by-step gesture blocking deferred.
+  - **Deferred (unchanged):** runtime module (drive states, rebuild, failure sim), backplane
+    diversity, sequential-class challenge metrics (engine-complete, challenge-dormant in v1),
+    RAID 50/60 nested placement.
+
+**Awaiting:** browser verify-in-page + merge `feature/raid-phase5-game` → `main`. All 101 engine
+tests green (model-perf 29 · validator 15 · challenge 10 · canvas-state 25 · layout-golden 16 ·
+canvas-algo-integration 6).

@@ -6,8 +6,9 @@
 
 **Current Phase**: Production (site live on GitHub Pages)
 
-**Active Work**: RAID game post-v1 chores — extract hard-coded domain data into
-resource files; responsive layout (Full HD + mobile).
+**Active Work**: RAID game post-v1 chores. Data extraction DONE (merged).
+Responsive layout + touch support on `feature/raid-responsive-layout` —
+awaiting in-browser / on-device verification before merge.
 
 ## Recent Milestones
 
@@ -20,8 +21,11 @@ resource files; responsive layout (Full HD + mobile).
 
 ## Next Steps
 
-- [ ] Extract hard-coded domain data from `src/` into `data/` resource files (spec §5)
-- [ ] Responsive layout for the RAID game (Full HD, mobile)
+- [x] Extract hard-coded domain data from `src/` into `data/` resource files (spec §5)
+      — `data/raid-levels/` family + component `ui:` sections; 159 tests (was 134)
+- [ ] Verify `feature/raid-responsive-layout` in browser + on a touch device, then merge
+- [ ] Deferred from extraction: wire `layout.js` placement primitives to the
+      `data/algorithms/*.yaml` descriptors (parametric algorithm registry)
 - [ ] Deferred modules (see spec §11): runtime behavior (drive states, hot-spare
       rebuild, failure simulation), backplane-diversity soft rule, RAID 50/60
       nested placement, sequential-class challenge metrics

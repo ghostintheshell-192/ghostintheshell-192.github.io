@@ -1,43 +1,27 @@
-# Tech debt — nested data-allocation order not ground-truth-verified
+# Tech debt — nested data-allocation order
 
-**Status:** open · **Opened:** 2026-06-14 · **Area:** `games/raid/src/engine/layout.js` (`placeNested`)
+**Status:** mostly RESOLVED 2026-06-14 · **Area:** `games/raid/src/engine/layout.js` (`placeNested`)
 
-## What
+## Resolution
 
-For nested RAID (50/60/100), `placeNested` composes each span's verified grid and
-assigns a GLOBAL data-segment numbering. The current numbering ("row by row, span by
-span, in disk order") is **provisional**: it is internally consistent but is **not**
-verified against a real controller's allocation order.
+The original concern (the nested global data ORDER was unverified) is resolved:
 
-Only **roles** (data / P / Q / mirror positions) and the **per-span** layout are
-golden-verified (`tests/layout-golden.test.js` [7]). The leaf `near` / RAID 1E ordering
-is also verified (slot-stream). The gap is strictly the *global cross-span data ORDER*.
+- **Per-span layout is now Linux-verified.** The data within each parity span follows the
+  left-symmetric WRITE order (data right after parity, wrapping), hand-derived from
+  `drivers/md/raid5.c` (`ALGORITHM_LEFT_SYMMETRIC`, and `ALGORITHM_ROTATING_N_CONTINUE`
+  for the RAID6 Q-left/DDF variant). near is hand-derived from `raid10.c`.
+- **The real bug was fixed:** `placeNested` numbered data in DISK order, breaking the
+  write-order sequence. Now it numbers in write order. Golden tables in
+  `layout-golden.test.js` [7] are hand-computed from the Linux rules (NOT dumped from the
+  engine) and assert EXACT segs; the independent hand calc matches the engine.
+- The `.personal` RAID 60 table had two hand-transcription issues (row 3 in disk order;
+  row 2 spans swapped), now corrected in `segment-allocation-rule-left-symmetric.md`.
 
-## Why it matters
+## Residual (minor, by design)
 
-The sandbox teaches *how data is written to memory*. The animation order is the lesson,
-not a cosmetic label. A wrong global order animates the wrong thing.
-
-## What we found (decoding `.personal/segment-allocation-rule-left-symmetric.md`, RAID 60)
-
-Leading hypothesis for the true rule (0-based):
-- **Intra-span:** data follows the left-symmetric WRITE order (right of parity, wrapping)
-  — verified on rows 1–2 of the hand table.
-- **Cross-span:** the outer RAID 0 gives each span one row-worth per round, **alternating
-  the span order each round** (round0 A→B, round1 B→A, round2 A→B …) — the "non-trivial"
-  pattern Valentina built the table to capture.
-
-## Open question (blocks implementing the exact rule)
-
-Row 3 / span A of the hand table is in **disk order**, not write order (rows 1–2 are
-write order). Unresolved: deliberate extra rule, or a hand-transcription slip?
-**Valentina is rechecking the table / source.** Until resolved, we do NOT implement the
-exact order (decision 2026-06-14: "solo ruoli ora, ordine dopo").
-
-## Definition of done
-
-1. Confirm the row-3 question (and ideally a second worked example).
-2. Pin the exact rule (intra-span write order + cross-span round alternation, or revised).
-3. Implement it in `placeNested`; assert EXACT segs in `layout-golden.test.js` against the
-   corrected `.personal` tables (RAID 50/60/100).
-4. Remove the provisional caveats from the test section [7] and from `placeNested`.
+The **cross-span** order — which span receives which span-stripe — is NOT defined by the
+Linux kernel (the kernel defines only the layout *within* a span; nesting is LVM/hardware
+stacking). We fix it by convention: one span-stripe per span per round, **ascending span
+order**, each span in write order. This is a reasonable, documented choice; a specific
+hardware controller could interleave differently. Revisit only if we need to match a
+particular controller's nesting. Not blocking.

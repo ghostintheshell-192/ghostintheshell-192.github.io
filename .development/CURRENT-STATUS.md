@@ -6,15 +6,22 @@
 
 **Current Phase**: Production (site live on GitHub Pages)
 
-**Active Work**: RAID game responsive/mobile UX polish (session in progress — more
-ritocchi planned). All of the following are MERGED to `main` and verified in browser
-on desktop (2K) + real mobile; 9-file headless suite green throughout:
-- responsive layout + touch DnD shim; narrow-viewport sidebar wrap
-- collapsible-accordion palette (<=900px, one section open at a time)
-- physical layer collapsed by default on narrow screens (secondary view) — re-renders on expand
-- desktop shell pinned to the real viewport box (`height:100%` over `100vh`) so a
-  `100vh>innerHeight` setup no longer adds a page scrollbar; grid items get `min-height:0`
-- data-layer title bar matching the physical layer's on narrow screens
+**Active Work**: Completing RAID combinations — on branch `feature/raid-complete-combinations`
+(4 commits), 10-file headless suite green (201 assertions). AWAITING in-browser verification
+of the animations, then merge. Delivers:
+- Recognizer: RAID 1E (odd striped mirror), RAID 100 (was MISNAMED RAID 1+0 — bug fixed),
+  and the mirror-of-arrays family (RAID 51/61/0+1). All shape-derived (never the algorithm).
+- Placement + animation: RAID 50/60 (generalized `placeNested` for parity spans), RAID 100
+  (mirror-mode), RAID 1E (near slot-stream, odd disks). Animation is free (render.js groups
+  by seq). RAID 51/61/0+1 recognized but stats-only (mirror parent, no flat grid).
+- Golden tables hand-laid in `.personal/golden-raid{50,100,1e}.md` (+ existing RAID 60), the
+  ground truth transcribed into `layout-golden.test.js` [7].
+- Data: `raid1e/raid100/raid51/raid61.yaml` + index.
+- OUT of scope (no two-axis representation): RAID 2/3/4, RAID 30/03, triple parity, mdadm Q-right.
+
+PRIOR responsive/mobile UX pass is MERGED to `main` (verified desktop 2K + real mobile):
+sidebar wrap + accordion palette, collapsible physical layer, viewport-fit desktop shell,
+matching layer title bars.
 
 `main` is 9 commits ahead of `origin` — awaiting Valentina's push (sandbox can't reach
 github.com). NOT yet pushed → not live on GitHub Pages.
@@ -39,13 +46,19 @@ github.com). NOT yet pushed → not live on GitHub Pages.
 - [x] Mobile layout fixed (was "non si vede ancora bene"): narrow-viewport sidebar
       now wraps and, <=900px, collapses into a one-at-a-time accordion of card-styled
       group rows (`src/sandbox/sidebar-accordion.js`). Verified on real mobile.
+- [~] RAID 50/60 nested placement + animation, RAID 1E, RAID 100/51/61 recognition —
+      DONE on `feature/raid-complete-combinations`, awaiting in-browser verify + merge.
+- [ ] In-browser verification of the new animations (build RAID 50/60/100/1E on
+      `games/raid/canvas.html`, confirm grids + ▶ animate; RAID 51/61 show stats only).
 - [ ] Confirm the touch drag-and-drop *gesture* itself on a real device (press-hold
       to drag a chip onto the canvas) — layout is good, gesture not yet stress-tested.
+- [ ] NEXT (part 2, user's plan): make the validator robust/scalable — cross-axis
+      constraints (e.g. near/far/offset → Linux mdadm only; no Windows OS for those).
 - [ ] Deferred from extraction: wire `layout.js` placement primitives to the
       `data/algorithms/*.yaml` descriptors (parametric algorithm registry)
 - [ ] Deferred modules (see spec §11): runtime behavior (drive states, hot-spare
-      rebuild, failure simulation), backplane-diversity soft rule, RAID 50/60
-      nested placement, sequential-class challenge metrics
+      rebuild, failure simulation), backplane-diversity soft rule,
+      sequential-class challenge metrics
 
 ## Active Issues
 

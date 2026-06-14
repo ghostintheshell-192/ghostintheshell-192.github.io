@@ -2,13 +2,14 @@
 
 ## Project State
 
-**Last Updated**: 2026-06-13
+**Last Updated**: 2026-06-14
 
 **Current Phase**: Production (site live on GitHub Pages)
 
 **Active Work**: RAID game post-v1 chores. Data extraction DONE (merged).
-Responsive layout + touch support on `feature/raid-responsive-layout` —
-awaiting in-browser / on-device verification before merge.
+Responsive layout + touch support MERGED to `main` (code clean, 9-file headless
+suite green) — on-device touch verification still pending (additive, browser-only,
+low risk). Stale branches pruned; `main` ahead of `origin` (awaiting push).
 
 ## Recent Milestones
 
@@ -23,7 +24,8 @@ awaiting in-browser / on-device verification before merge.
 
 - [x] Extract hard-coded domain data from `src/` into `data/` resource files (spec §5)
       — `data/raid-levels/` family + component `ui:` sections; 159 tests (was 134)
-- [ ] Verify `feature/raid-responsive-layout` in browser + on a touch device, then merge
+- [ ] Verify the merged responsive/touch layout on a real touch device (drag-and-drop
+      gesture, single-column mobile flow) — purely confirmatory, code already on `main`
 - [ ] Deferred from extraction: wire `layout.js` placement primitives to the
       `data/algorithms/*.yaml` descriptors (parametric algorithm registry)
 - [ ] Deferred modules (see spec §11): runtime behavior (drive states, hot-spare

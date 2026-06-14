@@ -62,7 +62,9 @@ github.com). NOT yet pushed → not live on GitHub Pages.
 
 ## Active Issues
 
-See `.development/tech-debt/` for tracked technical debt (currently empty).
+See `.development/tech-debt/` — `nested-data-allocation-order.md`: the global data ORDER
+for nested RAID (50/60/100) is provisional/unverified (only roles + per-span layout are
+golden). Open question on the `.personal` RAID 60 table's row 3, Valentina rechecking.
 
 Known wart (documented in spec completion log): the `capacityGB` field holds the
 disk chips' native unit (1/2/4, displayed as "TB") — rename out of scope for v1.

@@ -24,8 +24,10 @@ low risk). Stale branches pruned; `main` ahead of `origin` (awaiting push).
 
 - [x] Extract hard-coded domain data from `src/` into `data/` resource files (spec §5)
       — `data/raid-levels/` family + component `ui:` sections; 159 tests (was 134)
-- [ ] Verify the merged responsive/touch layout on a real touch device (drag-and-drop
-      gesture, single-column mobile flow) — purely confirmatory, code already on `main`
+- [ ] **Open issue**: mobile layout "non si vede ancora bene" on a real device (noted
+      2026-06-13, never diagnosed). The responsive/touch code is merged to `main`, but the
+      mobile visual layout still needs a fix — get a screenshot, diagnose, fix on a fresh
+      branch. Desktop is fine; touch drag-and-drop gesture also still to confirm on device.
 - [ ] Deferred from extraction: wire `layout.js` placement primitives to the
       `data/algorithms/*.yaml` descriptors (parametric algorithm registry)
 - [ ] Deferred modules (see spec §11): runtime behavior (drive states, hot-spare

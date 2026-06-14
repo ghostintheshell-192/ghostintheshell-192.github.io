@@ -6,10 +6,11 @@
 
 **Current Phase**: Production (site live on GitHub Pages)
 
-**Active Work**: RAID game post-v1 chores. Data extraction DONE (merged).
-Responsive layout + touch support MERGED to `main` (code clean, 9-file headless
-suite green) — on-device touch verification still pending (additive, browser-only,
-low risk). Stale branches pruned; `main` ahead of `origin` (awaiting push).
+**Active Work**: RAID game post-v1 chores, mobile UX. Data extraction, responsive
+layout, touch DnD, narrow-viewport sidebar wrap, and a collapsible-accordion palette
+(<=900px) are all MERGED to `main` and verified in browser on desktop + real mobile
+("si vede bene"). 9-file headless suite green throughout. `main` ahead of `origin`
+(awaiting Valentina's push — sandbox can't reach github.com).
 
 ## Recent Milestones
 
@@ -24,10 +25,11 @@ low risk). Stale branches pruned; `main` ahead of `origin` (awaiting push).
 
 - [x] Extract hard-coded domain data from `src/` into `data/` resource files (spec §5)
       — `data/raid-levels/` family + component `ui:` sections; 159 tests (was 134)
-- [ ] **Open issue**: mobile layout "non si vede ancora bene" on a real device (noted
-      2026-06-13, never diagnosed). The responsive/touch code is merged to `main`, but the
-      mobile visual layout still needs a fix — get a screenshot, diagnose, fix on a fresh
-      branch. Desktop is fine; touch drag-and-drop gesture also still to confirm on device.
+- [x] Mobile layout fixed (was "non si vede ancora bene"): narrow-viewport sidebar
+      now wraps and, <=900px, collapses into a one-at-a-time accordion of card-styled
+      group rows (`src/sandbox/sidebar-accordion.js`). Verified on real mobile.
+- [ ] Confirm the touch drag-and-drop *gesture* itself on a real device (press-hold
+      to drag a chip onto the canvas) — layout is good, gesture not yet stress-tested.
 - [ ] Deferred from extraction: wire `layout.js` placement primitives to the
       `data/algorithms/*.yaml` descriptors (parametric algorithm registry)
 - [ ] Deferred modules (see spec §11): runtime behavior (drive states, hot-spare

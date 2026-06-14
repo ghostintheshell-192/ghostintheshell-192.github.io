@@ -6,28 +6,32 @@
 
 **Current Phase**: Production (site live on GitHub Pages)
 
-**Active Work**: Completing RAID combinations — on branch `feature/raid-complete-combinations`
-(4 commits), 10-file headless suite green (201 assertions). AWAITING in-browser verification
-of the animations, then merge. Delivers:
-- Recognizer: RAID 1E (odd striped mirror), RAID 100 (was MISNAMED RAID 1+0 — bug fixed),
-  and the mirror-of-arrays family (RAID 51/61/0+1). All shape-derived (never the algorithm).
-- Placement + animation: RAID 50/60 (generalized `placeNested` for parity spans), RAID 100
-  (mirror-mode), RAID 1E (near slot-stream, odd disks). Animation is free (render.js groups
-  by seq). RAID 51/61/0+1 recognized but stats-only (mirror parent, no flat grid).
-- Golden tables hand-laid in `.personal/golden-raid{50,100,1e}.md` (+ existing RAID 60), the
-  ground truth transcribed into `layout-golden.test.js` [7].
-- Data: `raid1e/raid100/raid51/raid61.yaml` + index.
-- OUT of scope (no two-axis representation): RAID 2/3/4, RAID 30/03, triple parity, mdadm Q-right.
+**Active Work**: RAID combinations DONE & merged to `main` (verified in-browser, 205 assertions).
+Closed spec items that were deferred (RAID 50/60 nested placement; RAID 1E placement). NEXT is
+**phase 2 — validator robustness + constraints** (not started; plan below).
 
-PRIOR responsive/mobile UX pass is MERGED to `main` (verified desktop 2K + real mobile):
-sidebar wrap + accordion palette, collapsible physical layer, viewport-fit desktop shell,
-matching layer title bars.
+Combinations delivered (merged): recognizer RAID 1E / 100 / 51 / 61 / 0+1 (shape-derived);
+placement+animation RAID 50/60 (canonical write order, animates one block at a time), RAID 100,
+RAID 1E (near, odd disks); near/far/offset now golden-tested; validator made consistent with 1E.
+All layouts anchored to the Linux md source (raid5.c / raid10.c); golden tables hand-derived, not
+dumped from the engine. Earlier this session: responsive/mobile UX pass (also merged, verified).
 
-`main` is 9 commits ahead of `origin` — awaiting Valentina's push (sandbox can't reach
+**Phase 2 plan (next session)** — start with the DATA layer, then extend to physical:
+1. Refactor `validator.js` into a declarative rule registry ({code, severity, layer, run}), dedup
+   by (code, nodeId), compute the recognized level once in a ctx; reclassify existing rules by
+   layer. No behaviour change (15 tests stay green) — the scalable base.
+2. Add data-layer SOFT constraints: `mixed-disk-sizes` (capacity coerced to the smallest disk →
+   warn) and `uneven-spans` (nested spans of unequal size → warn). Soft = educate, don't block.
+3. DEFER to phase-2 part 2 (physical): fake RAID limited to 0/1/5/10; SATA/SAS need an HBA/controller
+   in the path; mixed-protocol arrays; Windows Storage Spaces specifics.
+
+`main` is 15 commits ahead of `origin` — awaiting Valentina's push (sandbox can't reach
 github.com). NOT yet pushed → not live on GitHub Pages.
 
 ## Recent Milestones
 
+- RAID combinations: 50/60 placement+animation, RAID 1E, 100, 51/61 recognition —
+  layouts anchored to Linux md source, golden hand-derived, verified in-browser - 2026-06-14
 - Responsive/mobile UX pass: sidebar wrap + accordion palette, collapsible physical
   layer, viewport-fit desktop shell, matching layer title bars — merged, verified
   on desktop + mobile - 2026-06-14

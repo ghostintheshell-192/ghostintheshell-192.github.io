@@ -390,11 +390,11 @@ a central rulebook — that's what keeps "add a file" honest.
 
 | Constraint | Source | Type |
 |-----------|--------|------|
-| min disks per level (5≥3, 6≥4, 10≥4 even…) | raid-types | hard |
+| min disks per level (5≥3, 6≥4, **10≥4 even / 1E≥3 odd**…) | raid-types | hard |
 | a partial Virtual Drive must cover **all disks of the group** | `terminologia.md` | hard |
 | nesting with RAID 0 requires the span be **fully** virtualized | `nested-raids.md` | hard |
 | a span is a **subset** of a drive group (→ "3 of 4" is allowed) | `terminologia.md` | hard (answers a key question) |
-| mirror needs even disk count (odd → RAID 1E, niche) | `distribuzione-segmenti-algoritmi.md` | hard |
+| ~~mirror needs even disk count (odd is invalid)~~ **SUPERSEDED 2026-06-14**: odd striped mirror is the valid RAID 1E level (recognized + placed via near, odd disks). The old hard "odd is invalid" rule was removed. | `distribuzione-segmenti-algoritmi.md` | — |
 | RAID engine must sit at exactly one point on the path | RIEPILOGO image | hard (determines hw/sw/fake) |
 | NVMe bypasses backplane + controller | `protocolli-dischi.md` | hard |
 | RAID 10 `near/far/offset` layout requires **software RAID / Linux** (mdadm); hw/fake → nested 1+0 only; Windows Storage Spaces → its own flat scheme (columns/copies, not near/far/offset) | cross-axis: control path **gates** the layout menu | hard |
@@ -560,9 +560,15 @@ rewrites** — model/recognizer/compile already recurse; only the gesture, the v
   - Physical view disk layout reflows each render (was: positions drifted/overlapped after churn).
   - `[hidden]{display:none !important}` so hidden panels actually hide over class `display` rules.
   - `CanvasState.reset()` + a header **⟲ Clear** button (master clear, both modes).
+- **DONE 2026-06-14 (combinations phase):** RAID 50/60 nested placement + animation (canonical
+  write order, hand-verified vs Linux raid5.c); RAID 1E (odd striped mirror) recognized + placed
+  (near, odd disks, raid10.c); RAID 100 + RAID 51/61/0+1 recognized; near/far/offset golden-verified;
+  validator made consistent with RAID 1E. Layouts anchored to the Linux md source; golden tables
+  hand-derived (not dumped from the engine). See `tech-debt/nested-data-allocation-order.md`.
 - **Deferred (unchanged):** runtime module (drive states, rebuild, failure sim), backplane
   diversity, sequential-class challenge metrics (engine-complete, challenge-dormant in v1),
-  RAID 50/60 nested placement.
+  parametric algorithm registry (wire `layout.js` to `data/algorithms/*.yaml`),
+  dRAID / erasure-coding (k+m). NEXT: validator robustness + cross-axis constraints (phase 2).
 
 **Awaiting:** a refactoring pass (planned, separate session) → then merge
 `feature/raid-phase5-game` → `main`. All engine tests green (134): model-perf 29 · validator 15 ·
